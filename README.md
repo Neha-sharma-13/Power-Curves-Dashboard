@@ -24,9 +24,9 @@ Matplotlib
 
 Project Structure
 power-curves-dashboard
-── app.py
-── requirements.txt
-── README.md
+-> app.py
+─> requirements.txt
+─> README.md
 
 1. Clone the repository
 git clone https://github.com/your-username/power-curves-dashboard.git
@@ -36,7 +36,7 @@ pip install -r requirements.txt
 3. Run the app
 streamlit run app.py
 
-How to Use
+How to Use :-
 Launch the app
 Upload your Excel file containing SCADA data
 Explore wind speed vs power output and turbine performance
