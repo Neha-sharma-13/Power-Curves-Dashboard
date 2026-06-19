@@ -3,7 +3,9 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import math
 import os
-
+from pathlib import Path 
+import numpy as np
+from io import BytesIO
 
 st.write("App started")
 st.title("WTG Power Curve Dashboard")
@@ -19,58 +21,131 @@ ref_power = [
 import streamlit as st
 import pandas as pd
 
-uploaded_file = st.file_uploader("Upload Excel file")
 
 @st.cache_data
-def load_data(file):
-    df = pd.read_excel(file)
-    return df[['Source', 'Timestamp', 'AI_intern_Windspeed', 'AI_intern_ActivePower']]
+def load_data():
 
-if uploaded_file is not None:
-    df = load_data(uploaded_file)
+    parquet_files = list(Path("data/processed").glob("*.parquet"))
+    df=pd.concat([pd.read_parquet(file) for file in parquet_files], ignore_index=True)
 
-    st.success("File uploaded successfully!")
-    st.dataframe(df)
+    return df[['Turbine_ID',
+            'Timestamp',
+            'AI_intern_Windspeed',
+            'AI_intern_ActivePower']]
 
-    # Sidebar
-    st.sidebar.header("Filters")
+df= load_data()
 
-    selected_turbine = st.sidebar.selectbox(
-        "Select Turbine",
-        df['Source'].unique()
-    )
+st.success("Data loaded successfully!")
+st.dataframe(df.head())
 
-    # Date filter
-    if 'Timestamp' in df.columns:
-        df['Timestamp'] = pd.to_datetime(df['Timestamp'])
+df["Turbine_ID"] = (
+    df["Turbine_ID"]
+    .astype(str)
+    .str.replace(".xlsx", "", regex=False)
+    .str.split("_")
+    .str[0]
+)
 
-        start_date = st.sidebar.date_input("Start Date", df['Timestamp'].min())
-        end_date = st.sidebar.date_input("End Date", df['Timestamp'].max())
+#st.write("Shape:", df.shape)
+#st.write(df['Turbine_ID'].nunique())
+#st.write(df['Timestamp'].min())
+#st.write(df['Timestamp'].max())
 
-        df = df[(df['Timestamp'] >= pd.to_datetime(start_date)) &
-                (df['Timestamp'] <= pd.to_datetime(end_date))]
 
-    # Filter data
-    df_filtered = df[df['Source'] == selected_turbine]
+#uploaded_file = st.file_uploader("Upload Excel file")
 
-    # Plot
-    fig, ax = plt.subplots(figsize=(8,5))
+#@st.cache_data
+#def load_data(file):
+#    df = pd.read_excel(file)
+#    return df[['Source', 'Timestamp', 'AI_intern_Windspeed', 'AI_intern_ActivePower']]
 
-    ax.scatter(
-        df_filtered['AI_intern_Windspeed'],
-        df_filtered['AI_intern_ActivePower'],
-        s=5,
-        alpha=0.2
-    )
+#if uploaded_file is not None:
 
-    ax.plot(ref_wind, ref_power, color='black', linewidth=2, linestyle='--')
 
-    ax.set_xlabel("Wind Speed")
-    ax.set_ylabel("Power")
-    ax.set_title(f"Power Curve - {selected_turbine}")
-    ax.grid()
 
-    st.pyplot(fig)
+#df = load_data(uploaded_file)
 
-else:
-    st.info("Please upload a file")
+#st.success("File uploaded successfully!")
+#st.dataframe(df)
+
+# Sidebar
+st.sidebar.header("Filters")
+
+#selected_turbine = st.sidebar.selectbox(
+#    "Select Turbine",
+#    df['Turbine_ID'].unique()
+#)
+
+
+turbine_options =["All"] + sorted(df['Turbine_ID'].unique())
+selected_turbine = st.sidebar.selectbox("Select Turbine", turbine_options)
+
+
+
+
+
+
+# Date filter
+if 'Timestamp' in df.columns:
+    df['Timestamp'] = pd.to_datetime(df['Timestamp'])
+
+    start_date = st.sidebar.date_input("Start Date", df['Timestamp'].min())
+    end_date = st.sidebar.date_input("End Date", df['Timestamp'].max())
+
+    df = df[(df['Timestamp'] >= pd.to_datetime(start_date)) &
+            (df['Timestamp'] <= pd.to_datetime(end_date))]
+
+
+# Filter data
+#df_filtered = df[df['Turbine_ID'] == selected_turbine]
+
+if selected_turbine == "All":
+    df_filtered = df
+else :
+    df_filtered = df[df["Turbine_ID"] == selected_turbine]
+
+
+
+csv = df_filtered.to_csv(index=False).encode('utf-8')
+
+st.download_button(
+    label="Download Selected Data (CSV)",
+    data= csv,
+    file_name=f"{selected_turbine}_filtered_data.csv",
+    mime="text/csv"
+)
+
+
+buffer = BytesIO()
+
+with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+    df_filtered.to_excel(writer, index=False)
+
+st.download_button(
+    label="Download Selected Data (Excel)",
+    data=buffer.getvalue(),
+    file_name=f"{selected_turbine}_filtered_data.xlsx",
+    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+)
+
+
+
+# Plot
+fig, ax = plt.subplots(figsize=(8,5))
+
+ax.scatter(
+    df_filtered['AI_intern_Windspeed'],
+    df_filtered['AI_intern_ActivePower'],
+    s=5,
+    alpha=0.2
+)
+
+ax.plot(ref_wind, ref_power, color='black', linewidth=2, linestyle='--')
+
+ax.set_xlabel("Wind Speed")
+ax.set_ylabel("Power")
+ax.set_title(f"Power Curve - {selected_turbine}")
+ax.grid()
+
+st.pyplot(fig)
+
